@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy Text Backup to JSON</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #1a1a1a; margin-bottom: 5px; }
+        .sub-text { text-align: center; color: #666; font-size: 13px; margin-bottom: 20px; }
+        
+        /* Text Area Style */
+        textarea { 
+            width: 100%; 
+            height: 250px; 
+            padding: 15px; 
+            border: 2px solid #e1e1e1; 
+            border-radius: 8px; 
+            font-size: 16px; 
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+            box-sizing: border-box; /* Fix padding issue */
+        }
+        textarea:focus { border-color: #007bff; }
+
+        /* Button Style */
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            font-size: 16px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            margin-top: 15px; 
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #0056b3; }
+
+        /* Status Bar */
+        #status { 
+            margin-top: 15px; 
+            text-align: center; 
+            font-weight: 500; 
+            padding: 12px; 
+            border-radius: 6px; 
+            font-size: 14px;
+        }
+        .status-idle { color: #666; background-color: #f8f9fa; border: 1px solid #ddd; }
+        .status-working { color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; }
+        .status-success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .status-error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📝 Personal Cloud Notes</h2>
+    <p class="sub-text">Connected to: hiteshjangir8057 / LEARN-360-EXPERTISE</p>
+    
+    <!-- यहाँ आप कुछ भी टाइप करें (Plain Text) -->
+    <textarea id="userText" placeholder="यहाँ कुछ भी लिखें... यह अपने आप JSON में सेव हो जाएगा।"></textarea>
+    
+    <button onclick="saveData()">☁️ Backup Text Now</button>
+
+    <div id="status" class="status-idle">Ready to sync...</div>
+</div>
+
+<script>
+    // --- SETTINGS ---
+    const OWNER = "hiteshjangir8057";
+    const REPO = "LEARN-360-EXPERTISE";
+    const FILE_PATH = "my_notes.json"; // JSON फाइल का नाम
+    
+    // 👇 यहाँ अपना GitHub Token डालें
+    const TOKEN = "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"; 
+
+    let currentSHA = null;
+    const textArea = document.getElementById("userText");
+    const statusDiv = document.getElementById("status");
+
+    function setStatus(msg, type) {
+        statusDiv.innerText = msg;
+        statusDiv.className = `status-${type}`;
+    }
+
+    // Unicode Support (Hindi/Emoji के लिए)
+    function utf8_to_b64(str) {
+        return window.btoa(unescape(encodeURIComponent(str)));
+    }
+    function b64_to_utf8(str) {
+        return decodeURIComponent(escape(window.atob(str)));
+    }
+
+    // 1. DATA LOAD (GitHub से JSON लाकर सिर्फ टेक्स्ट दिखाना)
+    async function loadData() {
+        setStatus("GitHub से डेटा चेक किया जा रहा है...", "working");
+        
+        const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`;
+
+        try {
+            const response = await fetch(url, {
+                headers: { "Authorization": `token ${TOKEN}` }
+            });
+
+            if (response.status === 404) {
+                setStatus("कोई पुराना डेटा नहीं मिला। नया शुरू करें।", "idle");
+                currentSHA = null;
+                return;
+            }
+
+            const data = await response.json();
+            currentSHA = data.sha;
+            
+            // JSON को पार्स करके सिर्फ text_content निकालें
+            const jsonContent = JSON.parse(b64_to_utf8(data.content));
+            
+            // Textarea में सिर्फ टेक्स्ट दिखाएं (JSON कोड नहीं)
+            if(jsonContent.text_content) {
+                textArea.value = jsonContent.text_content;
+            }
+            
+            setStatus(`Last Synced: ${jsonContent.last_updated}`, "success");
+
+        } catch (error) {
+            console.error(error);
+            setStatus("डेटा लोड करने में गलती हुई। टोकन चेक करें।", "error");
+        }
+    }
+
+    // 2. DATA SAVE (टेक्स्ट को JSON में लपेट कर सेव करना)
+    async function saveData() {
+        const text = textArea.value;
+        
+        if(!text.trim()) {
+            setStatus("खाली टेक्स्ट सेव नहीं होगा। कुछ लिखें।", "error");
+            return;
+        }
+
+        setStatus("Data Backup हो रहा है... कृपया रुकें", "working");
+
+        // हम आपके टेक्स्ट को JSON स्ट्रक्चर में डाल रहे हैं
+        const dataToSave = {
+            last_updated: new Date().toLocaleString(), // तारीख और समय
+            text_content: text // आपका लिखा हुआ टेक्स्ट
+        };
+
+        const jsonString = JSON.stringify(dataToSave, null, 4); // JSON में बदलो
+        const encodedContent = utf8_to_b64(jsonString); // Base64 में बदलो
+
+        const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`;
+        
+        const bodyData = {
+            message: "Updated notes via Website",
+            content: encodedContent
+        };
+
+        if (currentSHA) {
+            bodyData.sha = currentSHA;
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    "Authorization": `token ${TOKEN}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(bodyData)
+            });
+
+            if (!response.ok) throw new Error("Save Error");
+
+            const result = await response.json();
+            currentSHA = result.content.sha;
+            setStatus("✅ Data Backup Successful! (JSON में सेव हो गया)", "success");
+
+        } catch (error) {
+            console.error(error);
+            setStatus("❌ बैकअप फेल हो गया। कंसोल चेक करें।", "error");
+        }
+    }
+
+    // पेज खुलते ही डेटा लोड करें
+    window.onload = loadData;
+
+</script>
+
+</body>
+</html>
